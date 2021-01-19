@@ -1,0 +1,82 @@
+---
+- name: Test task
+  hosts: server
+  become: yes
+
+  vars:
+    domain: "domain.local"
+    ssh_key_1: id_rsa_user_1
+    ssh_key_2: id_rsa_user_2
+    files_max: '1204000'
+    somaxconn: '65535'
+
+  roles:
+    - role: add_ssh_key 
+      ssh_key: "{{ ssh_key_1 }}"
+    - role: add_ssh_key
+      ssh_key: "{{ ssh_key_2 }}"
+
+  tasks:
+    - name: apt update
+      apt:
+        update_cache: yes
+
+    - name: Install nginx, zsh, wget
+      apt:
+        name: 
+        - nginx
+        - zsh
+        - wget
+
+    - name: Copy nginx config
+      template:
+        src: config_nginx.j2
+        dest: /etc/nginx/sites-available/{{domain}}
+        mode: 0644
+      notify: Restart nginx
+
+    - name: Create symlink
+      file:
+        src: /etc/nginx/sites-available/{{domain}}
+        dest: /etc/nginx/sites-enabled/{{domain}}
+        state: link
+
+    - name: Remove default config
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Create a directory 
+      file:
+        path: /var/www/{{domain}}
+        state: directory
+        mode: '0755'   
+
+    - name: Clone a repo 
+      git:
+        repo: https://github.com/koskg/test_repo.git
+        dest: /var/www/{{domain}}
+        force: yes 
+
+    - name: Sysctl configuration
+      sysctl:
+        name: fs.file-max
+        value: "{{ files_max }}"
+        reload: yes
+
+    - sysctl:
+        name: net.core.somaxconn
+        value: "{{ somaxconn }}"
+        reload: yes
+
+  handlers:
+    - name: Restart nginx
+      service: 
+        name: nginx
+        state: restarted
+
+
+
+
+
+
